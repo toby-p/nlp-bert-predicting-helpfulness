@@ -94,8 +94,8 @@ if __name__ == "__main__":
     yelp_test = pd.read_csv(get_google_drive_download_url(yelp_url), encoding="utf-8")
     x_yelp_test = yelp_test["text"]
     y_yelp_test = yelp_test["label"]
-    print(f"Shape x_transfer_test: {x_yelp_test.shape}")
-    print(f"Shape y_transfer_test: {y_yelp_test.shape}")
+    print(f"Shape x_yelp_test: {x_yelp_test.shape}")
+    print(f"Shape x_yelp_test: {y_yelp_test.shape}")
 
     # Using BERT base uncased tokenizer as per the paper:
     print("Tokenizing ...")
