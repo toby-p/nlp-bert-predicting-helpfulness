@@ -29,7 +29,7 @@ if __name__ == "__main__":
         os.mkdir(MODEL_DIR)
 
 
-    def local_save_dir(*subdir: str, model_name: str = "test_model"): 
+    def local_save_dir(*subdir: str, model_name: str = "test_model"):
         """Create timestamped directory local for storing checkpoints or models.
 
         Args:
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     y_val = amazon_val["label"]
     x_test = amazon_test["reviewText"]
     y_test = amazon_test["label"]
-    
+
     print(f"Shape x_train: {x_train.shape}")
     print(f"Shape x_val: {x_val.shape}")
     print(f"Shape x_test: {x_test.shape}")
@@ -84,31 +84,52 @@ if __name__ == "__main__":
     print(f"Shape y_val: {y_val.shape}")
     print(f"Shape y_test: {y_test.shape}")
 
+    # Construct the test dataset for the transfer learning piece:
+    
+    def get_google_drive_download_url(raw_url: str):
+        return "https://drive.google.com/uc?id=" + raw_url.split("/")[-2]
+    
+    
+    yelp_url = "https://drive.google.com/file/d/1-3Czl0HdsMiVnnTQ4ckoAL0mcEDZGpsP/view?usp=sharing"
+    yelp_test = pd.read_csv(get_google_drive_download_url(yelp_url), encoding="utf-8")
+    x_yelp_test = yelp_test["text"]
+    y_yelp_test = yelp_test["label"]
+    print(f"Shape x_transfer_test: {x_yelp_test.shape}")
+    print(f"Shape y_transfer_test: {y_yelp_test.shape}")
+
     # Using BERT base uncased tokenizer as per the paper:
     print("Tokenizing ...")
     bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
     train_encodings = bert_tokenizer(
-        list(x_train.values), 
+        list(x_train.values),
         max_length=MAX_LENGTH,
         truncation=True,
-        padding='max_length', 
+        padding='max_length',
         return_tensors='tf'
     )
 
     valid_encodings = bert_tokenizer(
-        list(x_val.values), 
+        list(x_val.values),
         max_length=MAX_LENGTH,
         truncation=True,
-        padding='max_length', 
+        padding='max_length',
         return_tensors='tf'
     )
 
     test_encodings = bert_tokenizer(
-        list(x_test.values), 
+        list(x_test.values),
         max_length=MAX_LENGTH,
         truncation=True,
-        padding='max_length', 
+        padding='max_length',
+        return_tensors='tf'
+    )
+
+    yelp_test_encodings = bert_tokenizer(
+        list(x_yelp_test.values),
+        max_length=MAX_LENGTH,
+        truncation=True,
+        padding='max_length',
         return_tensors='tf'
     )
 
@@ -139,7 +160,7 @@ if __name__ == "__main__":
         # Compile the model:
         bert_model.compile(
             optimizer = tf.keras.optimizers.Adam(learning_rate=2e-5,epsilon=1e-08),
-            loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), 
+            loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             metrics = [tf.keras.metrics.SparseCategoricalAccuracy("accuracy")]
         )
 
@@ -161,49 +182,54 @@ if __name__ == "__main__":
 
     # Fit the model saving weights every epoch:
     history = model.fit(
-        [train_encodings.input_ids, train_encodings.token_type_ids, train_encodings.attention_mask], 
+        [train_encodings.input_ids, train_encodings.token_type_ids, train_encodings.attention_mask],
         y_train.values,
         validation_data=(
-            [valid_encodings.input_ids, valid_encodings.token_type_ids, valid_encodings.attention_mask], 
+            [valid_encodings.input_ids, valid_encodings.token_type_ids, valid_encodings.attention_mask],
             y_val.values
-            ),
-        batch_size=BATCH_SIZE, 
+        ),
+        batch_size=BATCH_SIZE,
         epochs=EPOCHS,
         callbacks=[cp_callback]
     )
-    
+
     print("Saving model, scores, and predictions ...")
     # Save the entire model to GDrive:
     model_dir = local_save_dir("full_model", model_name = MODEL_NAME)
     model.save(model_dir)
 
     # Save scores on the test set:
-    test_score = model.evaluate([test_encodings.input_ids, test_encodings.token_type_ids, test_encodings.attention_mask], y_test)
-    print("Test loss:", test_score[0])
-    print("Test accuracy:", test_score[1])
-    score_fp = os.path.join(model_dir, "test_score.txt")
-    with open(score_fp, "w") as f:
-        f.write(f"Test loss = {test_score[0]}\n")
-        f.write(f"Test accuracy = {test_score[1]}\n")
-    
-    # Save predictions and classification_report:
-    predictions = model.predict([test_encodings.input_ids, test_encodings.token_type_ids, test_encodings.attention_mask])
-    preds_fp = os.path.join(model_dir, "test_predictions.csv")
-    pred_df = pd.DataFrame(predictions.to_tuple()[0], columns=["pred_prob_0", "pred_prob_1"])
-    pred_df["yhat"] = pred_df[["pred_prob_0", "pred_prob_1"]].values.argmax(1)
-    pred_df["y"] = y_test
-    pred_df["category"] = np.where((pred_df["yhat"] == 1) & (pred_df["y"] == 1), "tp", None)
-    pred_df["category"] = np.where((pred_df["yhat"] == 0) & (pred_df["y"] == 0), "tn", pred_df["category"])
-    pred_df["category"] = np.where((pred_df["yhat"] == 1) & (pred_df["y"] == 0), "fp", pred_df["category"])
-    pred_df["category"] = np.where((pred_df["yhat"] == 0) & (pred_df["y"] == 1), "fn", pred_df["category"])
-    pred_df.to_csv(preds_fp, encoding="utf-8", index=False)
-    report = classification_report(y_test, pred_df["yhat"])
-    report_fp = os.path.join(model_dir, "classification_report.txt")
-    with open(report_fp, "w") as f:
-        for line in report.split("\n"):
-            f.write(f"{line}\n")
-    print(f"{MODEL_NAME} - test set results")
-    print(report)
+    for encodings, y_true, label in [
+        (test_encodings, y_test, "amazon_test"),
+        (yelp_test_encodings, y_yelp_test, "yelp_test")
+    ]:
+
+        test_score = model.evaluate([encodings.input_ids, encodings.token_type_ids, encodings.attention_mask], y_true)
+        print(f"{label} loss:", test_score[0])
+        print(f"{label} accuracy:", test_score[1])
+        score_fp = os.path.join(model_dir, f"{label}_score.txt")
+        with open(score_fp, "w") as f:
+            f.write(f"{label} loss = {test_score[0]}\n")
+            f.write(f"{label} accuracy = {test_score[1]}\n")
+
+        # Save predictions and classification_report:
+        predictions = model.predict([encodings.input_ids, encodings.token_type_ids, encodings.attention_mask])
+        preds_fp = os.path.join(model_dir, f"{label}_predictions.csv")
+        pred_df = pd.DataFrame(predictions.to_tuple()[0], columns=["pred_prob_0", "pred_prob_1"])
+        pred_df["yhat"] = pred_df[["pred_prob_0", "pred_prob_1"]].values.argmax(1)
+        pred_df["y"] = y_true
+        pred_df["category"] = np.where((pred_df["yhat"] == 1) & (pred_df["y"] == 1), "tp", "None")
+        pred_df["category"] = np.where((pred_df["yhat"] == 0) & (pred_df["y"] == 0), "tn", pred_df["category"])
+        pred_df["category"] = np.where((pred_df["yhat"] == 1) & (pred_df["y"] == 0), "fp", pred_df["category"])
+        pred_df["category"] = np.where((pred_df["yhat"] == 0) & (pred_df["y"] == 1), "fn", pred_df["category"])
+        pred_df.to_csv(preds_fp, encoding="utf-8", index=False)
+        report = classification_report(y_true, pred_df["yhat"])
+        report_fp = os.path.join(model_dir, f"{label}_classification_report.txt")
+        with open(report_fp, "w") as f:
+            for line in report.split("\n"):
+                f.write(f"{line}\n")
+        print(f"{MODEL_NAME} - {label} set results")
+        print(report)
 
     print("Saving history ...")
     # Save the history file:
