@@ -5,13 +5,12 @@ import numpy as np
 import os
 import pandas as pd
 import pickle
-import random
 from sklearn.metrics import classification_report
 import tensorflow as tf
 from transformers import BertTokenizer, TFBertForSequenceClassification
 
 
-MODEL_NAME = "amazon_finetune"
+MODEL_NAME = "bilal_full_yelp_finetune"
 BATCH_SIZE = 16
 EPOCHS = 4
 MAX_LENGTH = 320
@@ -29,7 +28,7 @@ if __name__ == "__main__":
         os.mkdir(MODEL_DIR)
 
 
-    def local_save_dir(*subdir: str, model_name: str = "test_model"): 
+    def local_save_dir(*subdir: str, model_name: str = "test_model"):
         """Create timestamped directory local for storing checkpoints or models.
 
         Args:
@@ -52,31 +51,27 @@ if __name__ == "__main__":
         return dir_path
 
 
-    # Using the datasets created in a separate notebook and saved to Github:
-    train_url = "https://raw.githubusercontent.com/toby-p/w266-final-project/main/data/amazon/train.csv"
-    test_url = "https://raw.githubusercontent.com/toby-p/w266-final-project/main/data/amazon/test.csv"
-    val_url = "https://raw.githubusercontent.com/toby-p/w266-final-project/main/data/amazon/val.csv"
+    # Using the data downloaded from here: https://sites.google.com/view/review-helpfulness-prediction/datasets
+    # Saved publicly in Google Drive.
+    def get_google_drive_download_url(raw_url: str):
+        return "https://drive.google.com/uc?id=" + raw_url.split("/")[-2]
 
 
-    def shuffle(df: pd.DataFrame):
-        "Make sure data is shuffled (deterministically)."
-        ix = list(df.index)
-        random.seed(42)
-        random.shuffle(ix)
-        return df.loc[ix].reset_index(drop=True)
+    train_url = "https://drive.google.com/file/d/104W3CqRu4hUK1ht7wPfi8r8fDT7xdFCf/view?usp=sharing"
+    valid_url = "https://drive.google.com/file/d/1--NRor8D2x5au59_B0LCk9wOHIc8Qh46/view?usp=sharing"
+    test_url = "https://drive.google.com/file/d/1-3Czl0HdsMiVnnTQ4ckoAL0mcEDZGpsP/view?usp=sharing"
 
+    yelp_train = pd.read_csv(get_google_drive_download_url(train_url), encoding="utf-8")
+    yelp_valid = pd.read_csv(get_google_drive_download_url(valid_url), encoding="utf-8")
+    yelp_test = pd.read_csv(get_google_drive_download_url(test_url), encoding="utf-8")
 
-    amazon_train = shuffle(pd.read_csv(train_url, encoding="latin1"))
-    amazon_test = shuffle(pd.read_csv(test_url, encoding="latin1"))
-    amazon_val = shuffle(pd.read_csv(val_url, encoding="latin1"))
+    x_train = yelp_train["text"]
+    y_train = yelp_train["label"]
+    x_val = yelp_valid["text"]
+    y_val = yelp_valid["label"]
+    x_test = yelp_test["text"]
+    y_test = yelp_test["label"]
 
-    x_train = amazon_train["reviewText"]
-    y_train = amazon_train["label"]
-    x_val = amazon_val["reviewText"]
-    y_val = amazon_val["label"]
-    x_test = amazon_test["reviewText"]
-    y_test = amazon_test["label"]
-    
     print(f"Shape x_train: {x_train.shape}")
     print(f"Shape x_val: {x_val.shape}")
     print(f"Shape x_test: {x_test.shape}")
@@ -89,34 +84,34 @@ if __name__ == "__main__":
     bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
     train_encodings = bert_tokenizer(
-        list(x_train.values), 
+        list(x_train.values),
         max_length=MAX_LENGTH,
         truncation=True,
-        padding='max_length', 
+        padding='max_length',
         return_tensors='tf'
     )
 
     valid_encodings = bert_tokenizer(
-        list(x_val.values), 
+        list(x_val.values),
         max_length=MAX_LENGTH,
         truncation=True,
-        padding='max_length', 
+        padding='max_length',
         return_tensors='tf'
     )
 
     test_encodings = bert_tokenizer(
-        list(x_test.values), 
+        list(x_test.values),
         max_length=MAX_LENGTH,
         truncation=True,
-        padding='max_length', 
+        padding='max_length',
         return_tensors='tf'
     )
 
     print("Training ...")
 
 
-    def amazon_finetune():
-        """Create a BERT model with parameters specified in the Bilal paper:
+    def bilal_full_yelp_finetune():
+        """Create a BERT model using the model and parameters specified in the Bilal paper:
         https://link.springer.com/article/10.1007/s10660-022-09560-w/tables/2
 
             - model: TFBertForSequenceClassification
@@ -139,18 +134,18 @@ if __name__ == "__main__":
         # Compile the model:
         bert_model.compile(
             optimizer = tf.keras.optimizers.Adam(learning_rate=2e-5,epsilon=1e-08),
-            loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), 
+            loss = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
             metrics = [tf.keras.metrics.SparseCategoricalAccuracy("accuracy")]
         )
 
         return bert_model
 
 
-    model = amazon_finetune()
+    model = bilal_full_yelp_finetune()
     print(model.summary())
 
     # Create directory for storing checkpoints after each epoch:
-    checkpoint_dir = local_save_dir("checkpoints", model_name = MODEL_NAME)
+    checkpoint_dir = local_save_dir("checkpoints", model_name=MODEL_NAME)
     checkpoint_path = checkpoint_dir + "/cp-{epoch:04d}.ckpt"
 
     # Create a callback that saves the model's weights:
@@ -161,33 +156,35 @@ if __name__ == "__main__":
 
     # Fit the model saving weights every epoch:
     history = model.fit(
-        [train_encodings.input_ids, train_encodings.token_type_ids, train_encodings.attention_mask], 
+        [train_encodings.input_ids, train_encodings.token_type_ids, train_encodings.attention_mask],
         y_train.values,
         validation_data=(
-            [valid_encodings.input_ids, valid_encodings.token_type_ids, valid_encodings.attention_mask], 
+            [valid_encodings.input_ids, valid_encodings.token_type_ids, valid_encodings.attention_mask],
             y_val.values
-            ),
-        batch_size=BATCH_SIZE, 
+        ),
+        batch_size=BATCH_SIZE,
         epochs=EPOCHS,
         callbacks=[cp_callback]
     )
-    
+
     print("Saving model, scores, and predictions ...")
     # Save the entire model to GDrive:
-    model_dir = local_save_dir("full_model", model_name = MODEL_NAME)
+    model_dir = local_save_dir("full_model", model_name=MODEL_NAME)
     model.save(model_dir)
 
     # Save scores on the test set:
-    test_score = model.evaluate([test_encodings.input_ids, test_encodings.token_type_ids, test_encodings.attention_mask], y_test)
+    test_score = model.evaluate(
+        [test_encodings.input_ids, test_encodings.token_type_ids, test_encodings.attention_mask], y_test)
     print("Test loss:", test_score[0])
     print("Test accuracy:", test_score[1])
     score_fp = os.path.join(model_dir, "test_score.txt")
     with open(score_fp, "w") as f:
         f.write(f"Test loss = {test_score[0]}\n")
         f.write(f"Test accuracy = {test_score[1]}\n")
-    
+
     # Save predictions and classification_report:
-    predictions = model.predict([test_encodings.input_ids, test_encodings.token_type_ids, test_encodings.attention_mask])
+    predictions = model.predict(
+        [test_encodings.input_ids, test_encodings.token_type_ids, test_encodings.attention_mask])
     preds_fp = os.path.join(model_dir, "test_predictions.csv")
     pred_df = pd.DataFrame(predictions.to_tuple()[0], columns=["pred_prob_0", "pred_prob_1"])
     pred_df["yhat"] = pred_df[["pred_prob_0", "pred_prob_1"]].values.argmax(1)
@@ -207,7 +204,7 @@ if __name__ == "__main__":
 
     print("Saving history ...")
     # Save the history file:
-    hist_dir = local_save_dir("history", model_name = MODEL_NAME)
+    hist_dir = local_save_dir("history", model_name=MODEL_NAME)
     with open(os.path.join(hist_dir, "hist_dict"), "wb") as f:
         pickle.dump(history.history, f)
 
