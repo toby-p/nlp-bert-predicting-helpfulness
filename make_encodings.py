@@ -11,9 +11,9 @@ from tensorflow import keras
 from transformers import BertTokenizer, TFBertForSequenceClassification
 
 
-EVAL_DIR = os.path.join(os.path.dirname(os.getcwd()), "transfer_learning_evaluation")
-if not os.path.exists(EVAL_DIR):
-    os.mkdir(EVAL_DIR)
+ENCODING_DIR = os.path.join(os.path.dirname(os.getcwd()), "encodings")
+if not os.path.exists(ENCODING_DIR):
+    os.mkdir(ENCODING_DIR)
     
 
 def get_google_drive_download_url(raw_url: str):
@@ -123,23 +123,20 @@ print(f"> train={len(amazon_large_train):,}, test={len(amazon_large_test):,}, va
 bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
 
-def tokenize(df: pd.DataFrame, name: str, x_col: str):
-    tokenized = list()
-    for dataframe in df:
-        encodings = bert_tokenizer(
-            list(df[x_col].values), 
-            max_length=320,
-            truncation=True,
-            padding="max_length", 
-            return_tensors="tf"
-        )
-        tokenized.append(encodings)
-    return tokenized
+def tokenize(df: pd.DataFrame, x_col: str):
+    encodings = bert_tokenizer(
+        list(df[x_col].values), 
+        max_length=320,
+        truncation=True,
+        padding="max_length", 
+        return_tensors="tf"
+    )
+    return encodings
 
 
 # Make the encodings and save them if not already done:
 for name, values in datasets.items():
-    dir_path = os.path.join(EVAL_DIR, name)
+    dir_path = os.path.join(ENCODING_DIR, name)
     if not os.path.exists(dir_path):
         os.mkdir(dir_path)
     for key in ("train", "val", "test"):
@@ -148,9 +145,9 @@ for name, values in datasets.items():
         if not os.path.exists(fp):
             print(f"> encoding ... ", end="")
             x_col = values["x_col"]
-            encodings = tokenize(values[key], name, x_col)
+            encodings = tokenize(values[key], x_col)
             with open(fp, "wb") as f:
                 pickle.dump(encodings, f)
-            print("> finished!")
+            print("finished!")
         else:
             print("> already encoded!")
