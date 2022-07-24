@@ -153,15 +153,15 @@ def finetune_classifier_layers(datasets: dict, dataset_name: str,
         n_layers = 2
     finetune_name = f"{trained_model_name}_{n_layers}_LAYERS_FINETUNED_ON_{dataset_name}"
 
-    # Create directory for storing checkpoints after each epoch:
-    checkpoint_dir = local_save_dir("checkpoints", model_name=finetune_name)
-    checkpoint_path = checkpoint_dir + "/cp-{epoch:04d}.ckpt"
-
-    # Create a callback that saves the model's weights:
-    cp_callback = tf.keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_path,
-        save_weights_only=True,
-        verbose=1)
+    # # Create directory for storing checkpoints after each epoch:
+    # checkpoint_dir = local_save_dir("checkpoints", model_name=finetune_name)
+    # checkpoint_path = checkpoint_dir + "/cp-{epoch:04d}.ckpt"
+    #
+    # # Create a callback that saves the model's weights:
+    # cp_callback = tf.keras.callbacks.ModelCheckpoint(
+    #     filepath=checkpoint_path,
+    #     save_weights_only=True,
+    #     verbose=1)
 
     y_col = datasets[dataset_name]["y_col"]
     y_train = datasets[dataset_name]["train"][y_col]
@@ -178,7 +178,7 @@ def finetune_classifier_layers(datasets: dict, dataset_name: str,
         ),
         batch_size=16,
         epochs=4,
-        callbacks=[cp_callback]
+        # callbacks=[cp_callback]
     )
 
     print("Saving model ...")
@@ -285,11 +285,21 @@ if __name__ == "__main__":
                     encodings = pickle.load(f)
                     finetuning_datasets[name][f"{key}_tokenized"] = encodings
 
+    # Adding iterations here which I've already trained in a previous run to save time:
+    dont_repeat = [
+        (None, "bilal", True),
+        (None, "bilal", True),
+        ("amazon_finetune", "bilal", True),
+    ]
+
     # Perform fine-tuning experiments on both Bilal dataset and our yelp dataset:
     for name in ("bilal", "yelp"):
         for unfreeze_p in (True, False):
             for pretrained_model in (None, "amazon_finetune", "amazon_finetune_LARGE"):
-                finetune_classifier_layers(
-                    datasets=finetuning_datasets, dataset_name=name,
-                    trained_model_name=pretrained_model, unfreeze_pooler=unfreeze_p
-                )
+                if (pretrained_model, name, unfreeze_p) in dont_repeat:
+                    pass
+                else:
+                    finetune_classifier_layers(
+                        datasets=finetuning_datasets, dataset_name=name,
+                        trained_model_name=pretrained_model, unfreeze_pooler=unfreeze_p
+                    )
