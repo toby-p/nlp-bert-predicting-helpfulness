@@ -1,0 +1,2 @@
+bert_base fine-tuned on bilal loss = 0.6290588974952698
+bert_base fine-tuned on bilal accuracy = 0.656499981880188

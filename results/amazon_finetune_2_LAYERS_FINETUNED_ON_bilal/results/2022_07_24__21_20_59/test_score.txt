@@ -1,0 +1,2 @@
+amazon_finetune fine-tuned on bilal loss = 0.6457548141479492
+amazon_finetune fine-tuned on bilal accuracy = 0.6255000233650208

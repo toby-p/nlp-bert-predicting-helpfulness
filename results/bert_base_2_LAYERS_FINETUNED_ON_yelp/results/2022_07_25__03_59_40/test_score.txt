@@ -1,0 +1,2 @@
+bert_base fine-tuned on yelp loss = 0.5414251089096069
+bert_base fine-tuned on yelp accuracy = 0.7434679269790649

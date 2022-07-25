@@ -1,0 +1,2 @@
+yelp_test loss = 0.7976080775260925
+yelp_test accuracy = 0.6538853049278259

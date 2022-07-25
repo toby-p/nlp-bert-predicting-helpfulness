@@ -1,0 +1,2 @@
+amazon_test loss = 0.656628429889679
+amazon_test accuracy = 0.7555000185966492

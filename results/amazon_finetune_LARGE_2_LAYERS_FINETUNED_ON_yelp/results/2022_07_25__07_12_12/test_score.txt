@@ -1,0 +1,2 @@
+amazon_finetune_LARGE fine-tuned on yelp loss = 0.5467514991760254
+amazon_finetune_LARGE fine-tuned on yelp accuracy = 0.7281981706619263
