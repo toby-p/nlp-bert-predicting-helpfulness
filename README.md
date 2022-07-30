@@ -1,6 +1,9 @@
 # w266-final-project
 Final project for UCB MIDS W266 NLP class
 
+## Report
+The full write up for our experiments and learning is published here [RoBERTa and Transfer Learning to Predict Review Helpfulness](https://github.com/toby-p/nlp-bert-predicting-helpfulness/blob/main/RoBERTa%20and%20Transfer%20Learning%20to%20Predict%20Review%20Helpfulness.pdf)
+
 ## Data
 The data sets used in this project can be found in the /data folder. We use review data sourced from Amazon and from Yelp.
 /data
